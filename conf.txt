@@ -1,0 +1,21 @@
+1.Состав системы:
+Ядро linux
+Util-linux
+Glibc
+Libstdc++
+Binutils
+Bash
+Eudev
+Sysinit
+zlib
+zstd
+Bc
+Flex 
+Pkg-config
+Kmod
+Libelf
+Grub
+Eudev
+SysVinit
+Bzip2
+2.Директория установки:

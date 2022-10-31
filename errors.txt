@@ -1,0 +1,98 @@
+# /etc/bash
+tempfile1=/tmp/tmp_1
+tempfile2=/tmp/tmp_2
+tempfile3=/tmp/tmp_3
+tempfile4=/tmp/tmp_4
+tempfile6=/tmp/tmp_6
+tempfile7=/tmp/tmp_7
+conffile="conf.txt"
+logfile_IS=/home/aleks/Project/log/logfile_IS_$$.txt
+report_IS=/home/aleks/Project/report/report_IS_$$.txt
+alarms_IS=/home/aleks/Project/alarms/alarms_IS_$$.txt
+
+script $logfile_IS -с
+
+err=0
+report() {
+        err=1
+        echo -n "error at line ${BASH_LINENO[0]}, in call to "
+        sed -n ${BASH_LINENO[0]}p $0
+        } >> $alarms_IS
+
+trap report ERR  
+#Iana-etc
+if grep "Iana-etc" $tempfile2; then
+
+err=0
+echo Установка iana-etc-20210202 | tee -a $report_IS
+tar xfv iana-etc-20210202.tar.xz
+cd iana-etc-20210202
+cp services protocols /etc
+cd ..
+if test $err = 0; then
+echo Установка завершена успешно | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+#glibc
+if grep "Glibc" $tempfile2; then
+err=0
+echo Установка glibc-2.33 | tee -a $report_IS
+tar xfv glibc-2.33.tar.xz &&
+cd glibc-2.33 
+patch -Np1 -i ../glibc-2.33-fhs-1.patch &&
+sed -e '402a *result = local->data.services[database_index];' \
+-i nss/nss_database.c &&
+rm -R build
+y
+y
+y
+y
+mkdir -v build &&
+cd build
+../configure --prefix=/usr --disable-werror --enable-kernel=3.2 --enable-stack-protector=strong --with-headers=/usr/include libc_cv_slibdir=/lib &&
+make &&
+touch /etc/ld.so.conf &&
+sed '/test-installation/s@$(PERL)@echo not running@' -i ../Makefile &&
+make install &&
+cp -v ../nscd/nscd.conf /etc/nscd.conf &&
+mkdir -pv /var/cache/nscd &&
+mkdir -pv /usr/lib/locale
+localedef -i POSIX -f UTF-8 C.UTF-8 2> /dev/null || true
+localedef -i cs_CZ -f UTF-8 cs_CZ.UTF-8
+localedef -i de_DE -f ISO-8859-1 de_DE
+localedef -i de_DE@euro -f ISO-8859-15 de_DE@euro
+localedef -i de_DE -f UTF-8 de_DE.UTF-8
+localedef -i el_GR -f ISO-8859-7 el_GR
+localedef -i en_GB -f UTF-8 en_GB.UTF-8
+localedef -i en_HK -f ISO-8859-1 en_HK
+localedef -i en_PH -f ISO-8859-1 en_PH
+localedef -i en_US -f ISO-8859-1 en_US
+localedef -i en_US -f UTF-8 en_US.UTF-8
+localedef -i es_MX -f ISO-8859-1 es_MX
+localedef -i fa_IR -f UTF-8 fa_IR
+localedef -i fr_FR -f ISO-8859-1 fr_FR
+localedef -i fr_FR@euro -f ISO-8859-15 fr_FR@euro
+localedef -i fr_FR -f UTF-8 fr_FR.UTF-8
+localedef -i it_IT -f ISO-8859-1 it_IT
+localedef -i it_IT -f UTF-8 it_IT.UTF-8
+localedef -i ja_JP -f EUC-JP ja_JP
+localedef -i ja_JP -f SHIFT_JIS ja_JP.SIJS 2> /dev/null || true
+localedef -i ja_JP -f UTF-8 ja_JP.UTF-8
+localedef -i ru_RU -f KOI8-R ru_RU.KOI8-R
+localedef -i ru_RU -f UTF-8 ru_RU.UTF-8
+localedef -i tr_TR -f UTF-8 tr_TR.UTF-8
+localedef -i zh_CN -f GB18030 zh_CN.GB18030
+localedef -i zh_HK -f BIG5-HKSCS zh_HK.BIG5-HKSCS
+make localedata/install-locales
+cd ..
+if test $err = 0; then
+echo Установка завершена успешно | tee -e $report_IS
+else 
+echo Ошибка установки glibc | tee $report_IS $alarms_IS
+fi;
+fi;
+echo конец установки
+exit
+

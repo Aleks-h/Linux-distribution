@@ -1,0 +1,1032 @@
+#! /bin/bash
+tempfile1=/tmp/tmp_1
+tempfile2=/tmp/tmp_2
+tempfile3=/tmp/tmp_3
+tempfile4=/tmp/tmp_4
+tempfile6=/tmp/tmp_6
+tempfile7=/tmp/tmp_7
+conffile="conf.txt"
+logfile_IS=/home/aleks/Project/log/logfile_IS_$$.txt
+report_IS=/home/aleks/Project/report/report_IS_$$.txt
+alarms_IS=/home/aleks/Project/report/alarms_IS_$$.txt
+report() {
+        err=1
+        echo -n "Ошибка в срочке № ${BASH_LINENO[0]}, а именно: "
+        sed -n ${BASH_LINENO[0]}p $0
+        echo -n "Комментарий к ошибке: "
+        } >> $alarms_IS
+
+exec > >(tee -i $logfile_IS)
+trap report ERR
+
+trap "rm -f $tempfile1 $tempfile2 $tempfile3 $tempfile4 $tempfile6 $tempfile7" 0 1 2 5 15
+
+echo Монтирование раздела для установки | tee -a $report_IS
+mkdir -pv $CLI
+export CLI=/mnt/cli
+sudo mount -v -t ext4 /dev/\
+$CLI
+
+echo Распаковка временной системы | tee -a $report_IS
+cd $CLI &&
+sudo rm -rf ./* &&
+sudo tar -xpf /home/Project/cli-temp-tools-10.1.tar.xz &&
+cd sources
+
+echo Вход в chroot | tee -a $report_IS
+sudo chroot "$CLI" /usr/bin/env -i \
+HOME=/root \
+TERM="$TERM" \
+PS1='(cli chroot) \u:\w\$ ' \
+PATH=/bin:/usr/bin:/sbin:/usr/sbin \
+/bin/bash --login +h
+
+#Libstdc++ установлен во 2 проходе
+
+#Iana-etc
+if grep "Iana-etc" $tempfile1; then
+err=0
+echo Установка iana-etc-20210202 | tee -a $report_IS
+tar xfv iana-etc-20210202.tar.xz
+cd iana-etc-20210202
+cp services protocols /etc
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#glibc
+if grep "Glibc" $tempfile1; then
+err=0
+echo Установка glibc-2.33 | tee -a $report_IS
+tar xfv glibc-2.33.tar.xz &&
+cd glibc-2.33 
+patch -Np1 -i ../glibc-2.33-fhs-1.patch &&
+sed -e '402a *result = local->data.services[database_index];' \
+-i nss/nss_database.c &&
+rm -R build
+y
+y
+y
+y
+mkdir -v build &&
+cd build
+../configure --prefix=/usr --disable-werror --enable-kernel=3.2 --enable-stack-protector=strong --with-headers=/usr/include libc_cv_slibdir=/lib &&
+make &&
+touch /etc/ld.so.conf &&
+sed '/test-installation/s@$(PERL)@echo not running@' -i ../Makefile &&
+make install &&
+cp -v ../nscd/nscd.conf /etc/nscd.conf &&
+mkdir -pv /var/cache/nscd &&
+mkdir -pv /usr/lib/locale
+localedef -i POSIX -f UTF-8 C.UTF-8 2> /dev/null || true
+localedef -i cs_CZ -f UTF-8 cs_CZ.UTF-8
+localedef -i de_DE -f ISO-8859-1 de_DE
+localedef -i de_DE@euro -f ISO-8859-15 de_DE@euro
+localedef -i de_DE -f UTF-8 de_DE.UTF-8
+localedef -i el_GR -f ISO-8859-7 el_GR
+localedef -i en_GB -f UTF-8 en_GB.UTF-8
+localedef -i en_HK -f ISO-8859-1 en_HK
+localedef -i en_PH -f ISO-8859-1 en_PH
+localedef -i en_US -f ISO-8859-1 en_US
+localedef -i en_US -f UTF-8 en_US.UTF-8
+localedef -i es_MX -f ISO-8859-1 es_MX
+localedef -i fa_IR -f UTF-8 fa_IR
+localedef -i fr_FR -f ISO-8859-1 fr_FR
+localedef -i fr_FR@euro -f ISO-8859-15 fr_FR@euro
+localedef -i fr_FR -f UTF-8 fr_FR.UTF-8
+localedef -i it_IT -f ISO-8859-1 it_IT
+localedef -i it_IT -f UTF-8 it_IT.UTF-8
+localedef -i ja_JP -f EUC-JP ja_JP
+localedef -i ja_JP -f SHIFT_JIS ja_JP.SIJS 2> /dev/null || true
+localedef -i ja_JP -f UTF-8 ja_JP.UTF-8
+localedef -i ru_RU -f KOI8-R ru_RU.KOI8-R
+localedef -i ru_RU -f UTF-8 ru_RU.UTF-8
+localedef -i tr_TR -f UTF-8 tr_TR.UTF-8
+localedef -i zh_CN -f GB18030 zh_CN.GB18030
+localedef -i zh_HK -f BIG5-HKSCS zh_HK.BIG5-HKSCS
+make localedata/install-locales
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки glibc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#zlib
+if grep "Zlib" $tempfile1; then
+err=0
+echo Установка zlib-1.2.11 | tee $report_IS
+tar xfv zlib-1.2.11.tar.xz &&
+cd zlib-1.2.11
+./configure --prefix=/usr
+make &&
+make install &&
+mv -v /usr/lib/libz.so.* /lib &&
+ln -sfv ../../lib/$(readlink /usr/lib/libz.so) /usr/lib/libz.so &&
+rm -fv /usr/lib/libz.a &&
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#zstd (для kmod)
+if grep "Zstd" $tempfile1; then
+err=0
+echo Установка zstd-1.4.8 | tee -a $report_IS
+tar xfv zstd-1.4.8.tar.xz &&
+cd zstd-1.4.8
+make &&
+make prefix=/usr install
+rm -v /usr/lib/libzstd.a
+mv -v /usr/lib/libzstd.so.* /lib
+ln -sfv ../../lib/$(readlink /usr/lib/libzstd.so) /usr/lib/libzstd.so
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#Bc
+if grep "Bc" $tempfile1; then
+err=0
+echo Установка bc-3.3.0 | tee -a $report_IS
+tar xfv bc-3.3.0.tar.xz &&
+cd bc-3.3.0
+make
+make install
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#flex
+if grep "Flex" $tempfile1; then
+err=0
+echo Установка flex-2.6.4 | tee -a $report_IS
+tar xfv flex-2.6.4.tar.xz &&
+cd flex-2.6.4
+./configure --prefix=/usr \
+--docdir=/usr/share/doc/flex-2.6.4 \
+--disable-static
+make
+make install
+ln -sv flex /usr/bin/lex
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#binutils
+if grep "Binutils" $tempfile1; then
+err=0
+echo Установка binutils-2.36.1 | tee -a $report_IS
+tar xfv binutils-2.36.1.tar.xz &&
+cd binutils-2.36.1
+rm -R build
+sed -i '/@\tincremental_copy/d' gold/testsuite/Makefile.in
+mkdir -v build &&
+cd build
+../configure --prefix=/usr \
+--enable-gold \
+--enable-ld=default \
+--enable-plugins \
+--enable-shared \
+--disable-werror \
+--enable-64-bit-bfd \
+--with-system-zlib &&
+make tooldir=/usr &&
+make tooldir=/usr install &&
+rm -fv /usr/lib/lib{bfd,ctf,ctf-nobfd,opcodes}.a
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#Shadow
+if grep "Shadow" $tempfile1; then
+err=0
+echo Установка shadow-4.8.1 | tee -a $report_IS
+tar xfv shadow-4.8.1.tar.xz
+cd shadow-4.8.1
+sed -i 's/groups$(EXEEXT) //' src/Makefile.in
+find man -name Makefile.in -exec sed -i 's/groups\.1 / /' {} \;
+find man -name Makefile.in -exec sed -i 's/getspnam\.3 / /' {} \;
+find man -name Makefile.in -exec sed -i 's/passwd\.5 / /' {} \;
+sed -e 's:#ENCRYPT_METHOD DES:ENCRYPT_METHOD SHA512:' \
+-e 's:/var/spool/mail:/var/mail:' \
+-i etc/login.defs
+sed -i 's/1000/999/' etc/useradd
+touch /usr/bin/passwd
+./configure --sysconfdir=/etc \
+--with-group-name-max-length=32
+make &&
+make install
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#GCC
+if grep "Gcc" $tempfile1; then
+err=0
+echo Установка gcc-10.2.0 | tee -a $report_IS
+tar xfv gcc-10.2.0.tar.xz &&
+cd gcc-10.2.0
+rm -R build &&
+case $(uname -m) in
+x86_64)
+sed -e '/m64=/s/lib64/lib/' \
+-i.orig gcc/config/i386/t-linux64
+;;
+esac
+mkdir -v build &&
+cd build &&
+../configure --prefix=/usr \
+LD=ld \
+--enable-languages=c,c++ \
+--disable-multilib \
+--disable-bootstrap \
+--with-system-zlib &&
+make &&
+make install &&
+rm -rf /usr/lib/gcc/$(gcc -dumpmachine)/10.2.0/include-fixed/bits/ &&
+chown -v -R root:root \
+/usr/lib/gcc/*linux-gnu/10.2.0/include{,-fixed} &&
+ln -sv ../usr/bin/cpp /lib &&
+ln -sfv ../../libexec/gcc/$(gcc -dumpmachine)/10.2.0/liblto_plugin.so \
+/usr/lib/bfd-plugins/ &&
+mkdir -pv /usr/share/gdb/auto-load/usr/lib
+mv -v /usr/lib/*gdb.py /usr/share/gdb/auto-load/usr/lib
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#Pkg-config (для kmod)
+if grep "Pkg-config" $tempfile1; then
+err=0
+echo Установка pkg-config-0.29.2 | tee -a $report_IS
+tar xfv pkg-config-0.29.2.tar.xz &&
+cd pkg-config-0.29.2
+./configure --prefix=/usr\
+--with-internal-glib\
+--disable-host-tool\
+--docdir=/usr/share/doc/pkg-config-0.29.2
+make
+make install
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#ncurses
+if grep "Ncurses" $tempfile1; then
+err=0
+echo Установка ncurses-6.2 | tee -a $report_IS
+tar zfv ncurses-6.2.tar.xz &&
+cd ncurses-6.2
+./configure --prefix=/usr --mandir=/usr/share/man --with-shared --without-debug --without-normal --enable-pc-files --enable-widec
+make &&
+make install &&
+mv -v /usr/lib/libncursesw.so.6* /lib
+ln -sfv ../../lib/$(readlink /usr/lib/libncursesw.so) /usr/lib/libncursesw.so
+for lib in ncurses form panel menu ; do
+rm -vf /usr/lib/lib${lib}.so
+echo "INPUT(-l${lib}w)" > /usr/lib/lib${lib}.so
+ln -sfv ${lib}w.pc /usr/lib/pkgconfig/${lib}.pc
+done
+rm -vf /usr/lib/libcursesw.so
+echo "INPUT(-lncursesw)" > /usr/lib/libcursesw.so
+ln -sfv libncurses.so /usr/lib/libcurses.so
+rm -fv /usr/lib/libncurscdes++w.a
+mkdir -v /usr/share/doc/ncurses-6.2
+cp -v -R doc/* /usr/share/doc/ncurses-6.2
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#Sed
+if grep "Sed" $tempfile1; then
+err=0
+echo Установка sed-4.8 | tee -a $report_IS
+tar xfv sed-4.8.tar.xz &&
+cd sed-4.8 &&
+./configure --prefix=/usr --bindir=/bin &&
+make &&
+make install &&
+install -d -m755 /usr/share/doc/sed-4.8
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#Gettext (autoconf)
+if grep "Gettext" $tempfile1; then
+err=0
+echo Установка gettext-0.21 | tee -a $report_IS
+tar xfv gettext-0.21.tar.xz &&
+cd gettext-0.21
+./configure --prefix=/usr \
+--disable-static \
+--docdir=/usr/share/doc/gettext-0.21
+make &&
+make install &&
+chmod -v 0755 /usr/lib/preloadable_libintl.so
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#Grep
+if grep "Grep" $tempfile1; then
+err=0
+echo Установка grep-3.6 | tee -a $report_IS
+tar xfv grep-3.6.tar.xz &&
+cd grep-3.6 && 
+./configure --prefix=/usr --bindir=/bin &&
+make &&
+make install &&
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#bash
+if grep "Bash" $tempfile1; then
+err=0
+echo Установка bash-5.1 | tee -a $report_IS
+tar xfv bash-5.1.tar.gz &&
+cd bash-5.1
+sed -i '/^bashline.o:.*shmbchar.h/a bashline.o: ${DEFDIR}/builtext.h' Makefile.in &&
+./configure --prefix=/usr \
+--docdir=/usr/share/doc/bash-5.1 \
+--without-bash-malloc \
+--with-installed-readline &&
+make &&
+make install
+mv -vf /usr/bin/bash /bin
+exec /bin/bash --login +h
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#GDBM
+if grep "GDBM" $tempfile1; then
+err=0
+echo Установка gdbm-1.19 | tee -a $report_IS
+tar xfv gdbm-1.19.tar.xz &&
+cd gdbm-1.19
+./configure --prefix=/usr\
+--disable-static \
+--enable-libgdbm-compat &&
+make &&
+make install
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#gperf-3.1
+if grep "Gperf" $tempfile1; then
+err=0
+echo Установка gperf-3.1 | tee -a $report_IS
+tar xfv gperf-3.1.tar.gz
+cd gperf-3.1
+./configure --prefix=/usr --docdir=/usr/share/doc/gperf-3.1 &&
+make &&
+make install
+cd .. 
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#Inetutils
+if grep "Inetutilus" $tempfile1; then
+err=0
+echo Установка inetutils-2.0 | tee -a $report_IS
+tar xfv inetutils-2.0.tar.xz
+cd inetutils-2.0
+./configure --prefix=/usr \
+--localstatedir=/var \
+--disable-logger \
+--disable-whois \
+--disable-rcp \
+--disable-rexec \
+--disable-rlogin \
+--disable-rsh \
+--disable-servers  &&
+make &&
+make install
+mv -v /usr/bin/{hostname,ping,ping6,traceroute} /bin
+mv -v /usr/bin/ifconfig /sbin
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#Autoconf
+if grep "Autoconf" $tempfile1; then
+err=0
+echo Установка autoconf-2.71 | tee -a $report_IS
+tar xfv autoconf-2.71.tar.xz &&
+cd autoconf-2.71
+./configure --prefix=/usr &&
+make &&
+make install
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#Automake
+if grep "#Automake" $tempfile1; then
+err=0
+echo Установка automake-1.16.3 | tee -a $report_IS
+tar xfv automake-1.16.3.tar.xz && 
+cd automake-1.16.3
+sed -i "s/''/etags/" t/tags-lisp-space.sh
+./configure --prefix=/usr --docdir=/usr/share/doc/automake-1.16.3 &&
+make &&
+make install
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#Kmod (для make devices ядра)
+if grep "Kmod" $tempfile1; then
+err=0
+echo Установка kmod-28 | tee -a $report_IS
+tar xfv kmod-28.tar.xz &&
+cd kmod-28
+./configure --prefix=/usr \
+--bindir=/bin \
+--sysconfdir=/etc \
+--with-rootlibdir=/lib \
+--with-xz \
+--with-zstd \
+--with-zlib
+make
+make install
+for target in depmod insmod lsmod modinfo modprobe rmmod; do
+ln -sfv ../bin/kmod /sbin/$target
+done
+ln -sfv kmod /bin/lsmod
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#Libelf
+if grep "Libelf" $tempfile1; then
+err=0
+echo Установка elfutils-0.183 | tee -a $report_IS
+tar xfv elfutils-0.183.tar.xz &&
+cd elfutils-0.183
+./configure --prefix=/usr \
+--disable-debuginfod \
+--enable-libdebuginfod=dummy \
+--libdir=/lib &&
+make &&
+make -C libelf install
+install -vm644 config/libelf.pc /usr/lib/pkgconfig
+rm /lib/libelf.a
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#openssl
+if grep "Openssl" $tempfile1; then
+err=0
+echo Установка openssl-1.1.1j | tee -a $report_IS
+tar xfv openssl-1.1.1j.tar.xz &&
+cd openssl-1.1.1j
+./config --prefix=/usr \
+--openssldir=/etc/ssl \
+--libdir=lib \
+shared \
+zlib-dynamic &&
+make &&
+sed -i '/INSTALL_LIBS/s/libcrypto.a libssl.a//' Makefile &&
+make MANSUFFIX=ssl install &&
+mv -v /usr/share/doc/openssl /usr/share/doc/openssl-1.1.1j
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+
+#Python3
+if grep "Python" $tempfile1; then
+err=0
+echo Установка Python-3.9.2 | tee -a $report_IS
+tar xfv Python-3.9.2.tar.xz &&
+cd Python-3.9.2
+./configure --prefix=/usr \
+--enable-shared \
+--with-system-expat \
+--with-system-ffi \
+--with-ensurepip=yes &&
+make &&
+make install
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#Coreutils
+if grep "Coreutils" $tempfile1; then
+err=0
+echo Установка coreutils-8.32 | tee -a $report_IS
+tar xfv coreutils-8.32.tar.xz &&
+cd coreutils-8.32
+patch -Np1 -i ../coreutils-8.32-i18n-1.patch
+sed -i '/test.lock/s/^/#/' gnulib-tests/gnulib.mk
+autoreconf -fiv
+FORCE_UNSAFE_CONFIGURE=1 ./configure \
+--prefix=/usr \
+--enable-no-install-program=kill,uptime
+make
+make install
+mv -v /usr/bin/{cat,chgrp,chmod,chown,cp,date,dd,df,echo} /bin
+mv -v /usr/bin/{false,ln,ls,mkdir,mknod,mv,pwd,rm} /bin
+mv -v /usr/bin/{rmdir,stty,sync,true,uname} /bin
+mv -v /usr/bin/chroot /usr/sbin
+mv -v /usr/share/man/man1/chroot.1 /usr/share/man/man8/chroot.8
+sed -i 's/"1"/"8"/' /usr/share/man/man8/chroot.8
+mv -v /usr/bin/{head,nice,sleep,touch} /bin
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#Check
+if grep "Check" $tempfile1; then
+err=0
+echo Установка check-0.15.2 | tee -a $report_IS
+tar xfv check-0.15.2.tar.xz &&
+cd check-0.15.2
+./configure --prefix=/usr --disable-static &&
+make &&
+make docdir=/usr/share/doc/check-0.15.2 install
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#Gawk
+if grep "Gawk" $tempfile1; then
+err=0
+echo Установка gawk-5.1.0 | tee -a $report_IS
+tar xfv gawk-5.1.0.tar.xz &&
+cd gawk-5.1.0 &&
+sed -i 's/extras//' Makefile.in &&
+./configure --prefix=/usr &&
+make &&
+make install &&
+mkdir -v /usr/share/doc/gawk-5.1.0 &&
+cp -v doc/{awkforai.txt,*.{eps,pdf,jpg}} /usr/share/doc/gawk-5.1.0 &&
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#GRUB
+if grep "Grub" $tempfile1; then
+err=0
+echo Установка grub-2.04 | tee -a $report_IS
+tar xfv grub-2.04.tar.xz &&
+cd grub-2.04
+sed "s/gold-version/& -R .note.gnu.property/" \
+-i Makefile.in grub-core/Makefile.in
+
+./configure --prefix=/usr \
+--sbindir=/sbin \
+--sysconfdir=/etc \
+--disable-efiemu \
+--disable-werror 
+make
+make install
+mv -v /etc/bash_completion.d/grub /usr/share/bash-completion/completions
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#iproute2
+if grep "IProute2" $tempfile1; then
+err=0
+echo Установка iproute2-5.10.0 | tee -a $report_IS
+tar xfv iproute2-5.10.0.tar.xz
+cd iproute2-5.10.0
+sed -i /ARPD/d Makefile
+rm -fv man/man8/arpd.8
+sed -i 's/.m_ipt.o//' tc/Makefile
+make &&
+make DOCDIR=/usr/share/doc/iproute2-5.10.0 install
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#MAKE
+if grep "Make" $tempfile1; then
+err=0
+echo Установка make-4.3 | tee -a $report_IS
+tar xfv make-4.3.tar.xz &&
+cd make-4.3
+./configure --prefix=/usr
+make
+make install
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#Vim
+if grep "Vim" $tempfile1; then
+err=0
+echo Установка vim-8.2.2433 | tee -a $report_IS
+tar xfv vim-8.2.2433.tar.xz &&
+cd vim-8.2.2433
+echo '#define SYS_VIMRC_FILE "/etc/vimrc"' >> src/feature.h
+./configure --prefix=/usr &&
+make &&
+make install &&
+ln -sv vim /usr/bin/vi
+for L in /usr/share/man/{,*/}man1/vim.1; do
+ln -sv vim.1 $(dirname $L)/vi.1
+done
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#Eudev
+if grep "Eudev" $tempfile1; then
+err=0
+echo Установка eudev-3.2.10 | tee -a $report_IS
+tar xfv eudev-3.2.10.tar.gz &&
+cd eudev-3.2.10
+./configure --prefix=/usr \
+--bindir=/sbin \
+--sbindir=/sbin \
+--libdir=/usr/lib \
+--sysconfdir=/etc \
+--libexecdir=/lib \
+--with-rootprefix=  \
+--with-rootlibdir=/lib \
+--enable-manpages \
+--disable-static &&
+make &&
+mkdir -pv /lib/udev/rules.d &&
+mkdir -pv /etc/udev/rules.d &&
+make install &&
+tar -xvf ../udev-lfs-20171102.tar.xz &&
+make -f udev-lfs-20171102/Makefile.lfs install &&
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#Util-linux
+if grep "Util-linux" $tempfile1; then
+err=0
+echo Установка util-linux-2.36.2 | tee -a $report_IS
+tar xfv util-linux-2.36.2.tar.xz
+cd util-linux-2.36.2
+./configure ADJTIME_PATH=/var/lib/hwclock/adjtime \
+--docdir=/usr/share/doc/util-linux-2.36.2 \
+--disable-chfn-chsh \
+--disable-login \
+--disable-nologin \
+--disable-su \
+--disable-setpriv \
+--disable-runuser \
+--disable-pylibmount \
+--disable-static \
+--without-python \
+--without-systemd \
+--without-systemdsystemunitdir \
+runstatedir=/run
+make &&
+make install
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#SysVinit
+if grep "Sysinit" $tempfile1; then
+err=0
+echo Установка sysvinit-2.98 | tee -a $report_IS
+tar xfv sysvinit-2.98.tar.xz &&
+cd sysvinit-2.98
+patch -Np1 -i ../sysvinit-2.98-consolidated-1.patch &&
+make &&
+make install &&
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+#Bzip2
+if grep "Bzip" $tempfile1; then
+err=0
+echo Установка bzip2-1.0.8 | tee -a $report_IS
+tar xfv bzip2-1.0.8.tar.xz &&
+cd bzip2-1.0.8
+patch -Np1 -i ../bzip2-1.0.8-install_docs-1.patch
+sed -i 's@\(ln -s -f \)$(PREFIX)/bin/@\1@' Makefile
+sed -i "s@(PREFIX)/man@(PREFIX)/share/man@g" Makefile
+make -f Makefile-libbz2_so
+make clean
+make
+make PREFIX=/usr install
+cp -v bzip2-shared /bin/bzip2
+cp -av libbz2.so* /lib
+ln -sv ../../lib/libbz2.so.1.0 /usr/lib/libbz2.so
+rm -v /usr/bin/{bunzip2,bzcat,bzip2}
+ln -sv bzip2 /bin/bunzip2
+ln -sv bzip2 /bin/bzcat
+
+rm -fv /usr/lib/libbz2.a
+
+cd ..
+if test $err = 0; then
+echo Установка завершена успешна | tee $report_IS
+else 
+echo Ошибка установки Iana-etc | tee $report_IS $alarms_IS
+fi;
+fi;
+
+
+echo Создание пользователя | tee -a $report_IS
+grub-install /dev/\
+groupadd \
+useradd -s /bin/bash -g \
+-m -k /dev/null \
+passwd \
+
+
+
+echo Конфигурация системы | tee -a $report_IS
+rm -rf /tmp/*
+
+logout
+sudo chroot "$CLI" /usr/bin/env -i \
+HOME=/root TERM="$TERM" \
+PS1='(cli chroot) \u:\w\$ ' \
+PATH=/bin:/usr/bin:/sbin:/usr/sbin \
+/bin/bash --login
+
+find /usr/lib /usr/libexec -name \*.la -delete
+find /usr -depth -name $(uname -m)-cli-linux-gnu\* | xargs rm -rf
+
+rm -rf /tools
+
+
+
+#CLI-Bootscript
+echo Установка lfs-bootscripts-20210201 | tee -a $report_IS
+cd /sources/
+tar xfv lfs-bootscripts-20210201.tar.xz
+cd lfs-bootscripts-20210201
+make install
+echo Финальные конфигурации системы
+bash /lib/udev/init-net-rules.sh
+cat /etc/udev/rules.d/70-persistent-net.rules
+udevadm test /sys/block/hdd
+
+sed -e 's/"write_cd_rules"/"write_cd_rules mode"/' \
+-i /etc/udev/rules.d/83-cdrom-symlinks.rules
+
+udevadm info -a -p /sys/class/video4linux/video0
+
+cat > /etc/udev/rules.d/83-duplicate_devs.rules << "EOF"
+# Persistent symlinks for webcam and tuner
+KERNEL=="video*", ATTRS{idProduct}=="1910", ATTRS{idVendor}=="0d81", SYMLINK+="web
+KERNEL=="video*", ATTRS{device}=="0x036f", ATTRS{vendor}=="0x109e", SYMLINK+="tvt
+EOF
+
+cd /etc/sysconfig/
+cat > ifconfig.eth0 << "EOF"
+ONBOOT=yes
+IFACE=eth0
+SERVICE=ipv4-static
+IP=192.168.1.2
+GATEWAY=192.168.1.1
+PREFIX=24
+BROADCAST=192.168.1.255
+EOF
+
+cat > /etc/resolv.conf << "EOF"
+# Begin /etc/resolv.conf
+domain <Your Domain Name>
+nameserver <IP address of your primary nameserver>
+nameserver <IP address of your secondary nameserver>
+# End /etc/resolv.conf
+EOF
+
+echo "<cli>" > /etc/hostname
+
+cat > /etc/hosts << "EOF"
+# Begin /etc/hosts
+127.0.0.1 localhost.localdomain localhost
+127.0.1.1 <FQDN> <HOSTNAME>
+<192.168.1.1> <FQDN> <HOSTNAME> [alias1] [alias2 ...]
+::1
+localhost ip6-localhost ip6-loopback
+ff02::1
+ip6-allnodes
+ff02::2
+ip6-allrouters
+# End /etc/hosts
+EOF
+
+echo Завершение установки | tee -a $report_IS
+cat > /etc/fstab << "EOF"
+# Begin /etc/fstab
+# file system mount-point type options dump fsck
+#order
+
+/dev/sda1      /          ext4       defaults             1 1		
+/dev/sda2 	swap	    swap	pri=1	              0 0
+proc		/proc	    proc       nosuid,noexec,nodev   0 0
+sysfs		/sys	    sysfs       nosuid,noexec,nodev  0 0
+devpts		/dev/pts    devpts      gid=5,mode=620       0 0
+tmpfs		/run	    tmpfs	defaults	       0 0
+devtmpfs 	/dev	    devtmpfs	mode=0755,nosuid      0 0 
+
+# End /etc/fstab
+EOF
+
+sed -e '/m64=/s/lib64/lib/' \
+-i.orig gcc/config/i386/t-linux64
+;;
+esac
+
+echo Установка ядра Linux
+tar xfv linux-5.10.17.tar.xz
+cd linux-5.10.17
+make mrproper
+make menuconfig
+make
+make modules_install
+cp -iv arch/x86/boot/bzImage /boot/vmlinuz-5.10.17-cli-10.1
+cp -iv System.map /boot/System.map-5.10.17
+cp -iv .config /boot/config-5.10.17
+install -d /usr/share/doc/linux-5.10.17
+cp -r Documentation/* /usr/share/doc/linux-5.10.17
+
+install -v -m755 -d /etc/modprobe.d
+cat > /etc/modprobe.d/usb.conf << "EOF"
+# Begin /etc/modprobe.d/usb.conf
+install ohci_hcd /sbin/modprobe ehci_hcd ; /sbin/modprobe -i ohci_hcd ; true
+install uhci_hcd /sbin/modprobe ehci_hcd ; /sbin/modprobe -i uhci_hcd ; true
+# End /etc/modprobe.d/usb.conf
+EOF
+
+cd /tmp
+grub-mkrescue --output=grub-img.iso
+xorriso -as cdrecord -v dev=/dev/cdrw blank=as_needed grub-img.iso
+
+grub-install /dev/\
+
+
+cat > /boot/grub/grub.cfg << "EOF"
+# Begin /boot/grub/grub.cfg
+set default=0
+set timeout=50
+insmod ext2
+set root=(hd0,1)
+menuentry "GNU/Linux, Linux 5.10.17-cli-10.1" {
+linux /boot/vmlinuz-5.10.17-lfs-10.1 root=/dev/sda1 ro
+}
+EOF
+
+echo 10.1 > /etc/cli-release
+
+cat > /etc/lsb-release << "EOF"
+DISTRIB_ID="Linux From Scratch"
+DISTRIB_RELEASE="10.1"
+DISTRIB_CODENAME="<your name here>"
+DISTRIB_DESCRIPTION="Linux From Scratch"
+EOF
+
+cat > /etc/os-release << "EOF"
+NAME="Linux From Scratch"
+VERSION="10.1"
+ID=cli
+PRETTY_NAME="Linux From Scratch 10.1"
+VERSION_CODENAME="<your name here>"
+EOF
+
+
+
+logout 
+
+sudo umount -Rv $CLI
+shutdown -r now
+
